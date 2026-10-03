@@ -80,7 +80,14 @@ export default defineAgent({
       // O backend guarda cada fala e não é idempotente: nada de gerar resposta antes de a vez fechar.
       // CPU pequena: sem o VAD local (Silero) e sem gravação (ffmpeg); o fim da fala vem da transcrição.
       vad: null,
-      turnHandling: { turnDetection: 'stt', preemptiveGeneration: { enabled: false } },
+      // Entrevista: o candidato responde com calma, então espera 2s de silêncio antes de fechar a vez
+      // (o padrão de 0,5s picotava a resposta em várias falas) e o agente não é cortado por ruído.
+      turnHandling: {
+        turnDetection: 'stt',
+        endpointing: { mode: 'fixed', minDelay: 2000, maxDelay: 6000 },
+        interruption: { enabled: false },
+        preemptiveGeneration: { enabled: false },
+      },
       tts: new inference.TTS({ model: 'gradium/default', voice: pickVoice(meta.voicePref, meta.interviewId), language: 'pt' }),
     });
     const agent = new InterviewAgent(meta);
