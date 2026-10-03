@@ -95,7 +95,7 @@ No termo de consentimento dá para escolher **Voz**. Há dois caminhos, escolhid
 - **Com LiveKit** (`LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` definidos): o navegador entra numa sala LiveKit (`apps/web/components/voice-room.tsx`) e um worker (`apps/voice-agent`, LiveKit Agents para Node) cuida da conversa. Transcrição Deepgram Nova-3 e voz Gradium pt-BR, ambas pelo LiveKit Inference (sem contas extras além do LiveKit Cloud). O worker **não decide nada sobre a entrevista**: cada fala transcrita vai ao mesmo `POST /interviews/:id/messages` do modo texto (`llmNode` do agente), então rubrica, ferramentas validadas, tempo, pausa e transcrição continuam no backend. Fechar a aba pausa a entrevista. O token da sala sai de `POST /interviews/:id/voice-token`. Rode com `npm run dev:voice`. No Render, o worker roda em um serviço próprio (`node apps/voice-agent/dist/agent.js start`, com `INTERVIEW_API_URL` apontando para `<site>/api`), porque site, API e worker juntos não cabem no plano gratuito; `start-all.sh` só o sobe junto com `VOICE_WORKER_INLINE=1`.
 - **Sem LiveKit**: o navegador (Chrome ou Edge) transcreve e fala sozinho (Web Speech API, `apps/web/components/use-voice.ts`). Serve para validar a experiência sem contas externas.
 
-Não há gravação de áudio nem análise de tom, sotaque ou imagem. A voz masculina precisa do id do Mateus (Gradium) em `VOICE_MALE_ID`; sem ele usa a feminina. Imagem (vídeo) fica para depois.
+Não há gravação de áudio nem análise de tom, sotaque ou imagem. Vozes: Bianca (feminina) e Mateus (masculina), ids do Gradium; dá para trocar em `VOICE_FEMALE_ID` e `VOICE_MALE_ID`. Imagem (vídeo) fica para depois.
 
 ## Fora desta PoC
 

@@ -2,10 +2,10 @@ import { fileURLToPath } from 'node:url';
 import { type JobContext, ServerOptions, cli, defineAgent, inference, llm, voice } from '@livekit/agents';
 import { post, streamMessage, turnCount } from './backend.js';
 
-// Vozes pt-BR do Gradium (LiveKit Inference). O id da masculina (Mateus) vem
-// da biblioteca de vozes do Gradium; sem ele, usa a feminina.
-const FEMALE_VOICE = process.env.VOICE_FEMALE_ID ?? '4SZHfMpw-p23BW89';
-const MALE_VOICE = process.env.VOICE_MALE_ID ?? FEMALE_VOICE;
+// Vozes pt-BR do Gradium (LiveKit Inference): Bianca e Mateus, da biblioteca de
+// vozes do Gradium. Dá para trocar por variável de ambiente.
+const FEMALE_VOICE = process.env.VOICE_FEMALE_ID ?? 'uCqxlQCKi8sPHwG2';
+const MALE_VOICE = process.env.VOICE_MALE_ID ?? 'AByHrwi1S-yLzW-s';
 
 interface RoomMeta {
   interviewId: string;
