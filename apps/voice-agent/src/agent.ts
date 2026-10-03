@@ -78,7 +78,9 @@ export default defineAgent({
       // O LLM é obrigatório no pipeline, mas llmNode o substitui pela API.
       llm: new inference.LLM({ model: 'openai/gpt-4.1-mini' }),
       // O backend guarda cada fala e não é idempotente: nada de gerar resposta antes de a vez fechar.
-      turnHandling: { preemptiveGeneration: { enabled: false } },
+      // CPU pequena: sem o VAD local (Silero) e sem gravação (ffmpeg); o fim da fala vem da transcrição.
+      vad: null,
+      turnHandling: { turnDetection: 'stt', preemptiveGeneration: { enabled: false } },
       tts: new inference.TTS({ model: 'gradium/default', voice: pickVoice(meta.voicePref, meta.interviewId), language: 'pt' }),
     });
     const agent = new InterviewAgent(meta);
@@ -94,7 +96,7 @@ export default defineAgent({
       if (agent.ended && ev.newState === 'listening') ctx.shutdown('entrevista encerrada');
     });
 
-    await session.start({ agent, room: ctx.room });
+    await session.start({ agent, room: ctx.room, record: false });
     if ((await turnCount(meta.userId, meta.interviewId)) === 0) {
       // Abertura: texto vazio faz o backend iniciar a conversa.
       session.generateReply();
