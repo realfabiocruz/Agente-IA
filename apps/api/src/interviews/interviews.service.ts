@@ -299,7 +299,9 @@ export class InterviewsService {
     if (iv.status !== 'IN_PROGRESS' && iv.status !== 'CONSENTED') {
       throw new ConflictException('Retome a entrevista antes de entrar na sala de voz');
     }
-    const room = `interview-${iv.id}`;
+    // Sala nova a cada entrada: o LiveKit só chama o agente quando cria a sala, e a anterior
+    // continua existindo por alguns minutos depois que a pessoa sai.
+    const room = `interview-${iv.id}-${Date.now().toString(36)}`;
     const token = new AccessToken(key, secret, {
       identity: user.id,
       ttl: '2h',
