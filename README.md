@@ -88,13 +88,18 @@ Tudo que é simulado está isolado para ser trocado:
 - **Usuários**: o modelo `MockUser` no fim do `schema.prisma`; `Interview.candidateId` já é só o id do `User` da plataforma, sem relação, para a migração não depender dele.
 - **Front**: `apps/web/components/user-context.tsx` e o seletor do cabeçalho. As rotas `entrevistas/[id]` e `@modal/(.)entrevistas/[id]` copiam direto para o App Router da plataforma.
 
-## Modo voz (primeira versão)
+## Modo voz
 
-No termo de consentimento dá para escolher **Voz**. O navegador (Chrome ou Edge) transcreve a fala e lê as respostas do agente em voz alta (Web Speech API, `apps/web/components/use-voice.ts`); o entrevistador é o mesmo do modo texto, com um prompt ajustado para fala. Não há gravação de áudio nem análise de tom. É só para validar a experiência: a qualidade das vozes depende do navegador. Para produção, a proposta segue com LiveKit Agents e STT/TTS de um provedor, mantendo esta API.
+No termo de consentimento dá para escolher **Voz**. Há dois caminhos, escolhidos pelo ambiente:
+
+- **Com LiveKit** (`LIVEKIT_URL`, `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET` definidos): o navegador entra numa sala LiveKit (`apps/web/components/voice-room.tsx`) e um worker (`apps/voice-agent`, LiveKit Agents para Node) cuida da conversa. Transcrição Deepgram Nova-3 e voz Gradium pt-BR, ambas pelo LiveKit Inference (sem contas extras além do LiveKit Cloud). O worker **não decide nada sobre a entrevista**: cada fala transcrita vai ao mesmo `POST /interviews/:id/messages` do modo texto (`llmNode` do agente), então rubrica, ferramentas validadas, tempo, pausa e transcrição continuam no backend. Fechar a aba pausa a entrevista. O token da sala sai de `POST /interviews/:id/voice-token`. Rode com `npm run dev:voice` (ou `start-all.sh`, que sobe o worker quando as chaves existem).
+- **Sem LiveKit**: o navegador (Chrome ou Edge) transcreve e fala sozinho (Web Speech API, `apps/web/components/use-voice.ts`). Serve para validar a experiência sem contas externas.
+
+Não há gravação de áudio nem análise de tom, sotaque ou imagem. A voz masculina precisa do id do Mateus (Gradium) em `VOICE_MALE_ID`; sem ele usa a feminina. Imagem (vídeo) fica para depois.
 
 ## Fora desta PoC
 
-- Voz de produção (LiveKit Agents, imagem) e o endpoint interno `/internal/interviews/:id/events` do worker de voz: etapa 3.
+- Imagem/vídeo e o endpoint interno `/internal/interviews/:id/events` do worker de voz: etapa 3.
 - Vaga atrelada com blocos cultural e expectativa: fase 2 (o plano de blocos já existe em `plan.ts`, mas a API recusa `jobOpeningId`).
 - Feature flag, guards reais, retenção de gravações (`Recording`) e painel de resposta a contestações.
 - A trava contra mensagens simultâneas é em memória (uma instância); com mais réplicas, trocar por trava no banco.

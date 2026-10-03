@@ -23,5 +23,11 @@ services:
           property: connectionString
       - key: API_INTERNAL_URL
         value: http://localhost:3001
+      - key: LIVEKIT_URL
+        sync: false # opcional: wss://<projeto>.livekit.cloud; sem as 3 variáveis do LiveKit a voz usa o navegador
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false # opcional: sem a chave roda em modo simulado

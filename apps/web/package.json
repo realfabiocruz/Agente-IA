@@ -17,6 +17,7 @@
     "typescript": "~5.9"
   },
   "dependencies": {
+    "livekit-client": "^2.22.3",
     "next": "^16.3.8",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"

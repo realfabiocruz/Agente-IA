@@ -5,7 +5,9 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  NotImplementedException,
 } from '@nestjs/common';
+import { AccessToken } from 'livekit-server-sdk';
 import type { InterviewStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformService } from '../platform/platform.service';
@@ -17,11 +19,12 @@ import { ToolExecutor } from './tool-executor';
 import { BLOCK_LABEL, budgetNote, elapsedMs, planFor, timeState, totalMinutes } from './plan';
 import { applyAdjustments, ScoreAdjustment, weightedResult } from '../evaluation/scoring';
 
-export const CONSENT_VERSION = 'consent-v1';
+export const CONSENT_VERSION = 'consent-v2';
 export const CONSENT_TEXT = [
   'Esta entrevista é conduzida por um agente de inteligência artificial da Whizz.',
   'Ficam gravados o texto da conversa, os horários de cada fala e as evidências que o agente registra.',
   'Esses dados servem para avaliar o seu domínio do skill escolhido. A avaliação é feita por IA e sempre conferida por uma pessoa antes de valer para o seu perfil ou para o ranking do skill.',
+  'No modo voz, o áudio passa por serviços de transcrição e de voz sintética (LiveKit e provedores parceiros) durante a conversa. A Whizz não guarda o áudio, apenas a transcrição, e a avaliação não usa tom de voz, sotaque ou imagem.',
   'Parte do conteúdo é processada por um provedor de IA (Anthropic) fora do Brasil. Não compartilhe dados pessoais sensíveis durante a conversa.',
   'Os dados ficam guardados enquanto a avaliação estiver ativa no seu perfil, conforme a política de privacidade da plataforma.',
   'Você pode pedir para ser avaliado por uma pessoa em vez do agente a qualquer momento, e pode contestar o resultado depois.',
@@ -282,6 +285,28 @@ export class InterviewsService {
 
     if (ended) await this.queue.send(EVALUATE_QUEUE, { interviewId: id });
     return { block: executor.block, ended, status: ended ? 'COMPLETED' : 'IN_PROGRESS' };
+  }
+
+  /** Token para a pessoa entrar na sala de voz da entrevista (LiveKit). */
+  async voiceToken(user: CurrentUser, id: string) {
+    const url = process.env.LIVEKIT_URL;
+    const key = process.env.LIVEKIT_API_KEY;
+    const secret = process.env.LIVEKIT_API_SECRET;
+    if (!url || !key || !secret) throw new NotImplementedException('Voz com LiveKit não está configurada neste ambiente');
+    const iv = await this.load(id);
+    this.assertCanView(user, iv.candidateId);
+    if (iv.mode !== 'VOICE') throw new BadRequestException('Esta entrevista não é por voz');
+    if (iv.status !== 'IN_PROGRESS' && iv.status !== 'CONSENTED') {
+      throw new ConflictException('Retome a entrevista antes de entrar na sala de voz');
+    }
+    const room = `interview-${iv.id}`;
+    const token = new AccessToken(key, secret, {
+      identity: user.id,
+      ttl: '2h',
+      metadata: JSON.stringify({ interviewId: iv.id, userId: user.id, voicePref: iv.voicePref }),
+    });
+    token.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true, canPublishData: false });
+    return { url, room, token: await token.toJwt() };
   }
 
   async pause(user: CurrentUser, id: string) {

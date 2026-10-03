@@ -94,6 +94,12 @@ export class InterviewsController {
   }
 
   @Roles('CANDIDATE')
+  @Post(':id/voice-token')
+  voiceToken(@User() user: CurrentUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.interviews.voiceToken(user, id);
+  }
+
+  @Roles('CANDIDATE')
   @Post(':id/pause')
   pause(@User() user: CurrentUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.interviews.pause(user, id);

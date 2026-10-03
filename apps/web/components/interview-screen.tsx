@@ -6,6 +6,7 @@ import { api, ApiError, sendMessage } from '@/lib/api';
 import { STATUS_LABEL, type InterviewState } from '@/lib/types';
 import { useUser } from './user-context';
 import { useVoice } from './use-voice';
+import { VoiceRoom } from './voice-room';
 
 type Bubble = { key: string; speaker: 'AGENT' | 'CANDIDATE'; text: string; pending?: boolean };
 
@@ -35,6 +36,8 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
   const lastSpoken = useRef<string | null>(null);
   const [muted, setMuted] = useState(false);
   const isVoice = state?.mode === 'VOICE';
+  // 'unknown' até testarmos se o ambiente tem LiveKit; sem ele, cai para a voz do navegador.
+  const [lk, setLk] = useState<'unknown' | 'yes' | 'no'>('unknown');
   const talkRef = useRef<(t: string) => void>(() => {});
   const voice = useVoice(state?.voicePref ?? 'RANDOM', (t) => talkRef.current(t));
 
@@ -105,22 +108,30 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
     if (!sending) talk(t);
   };
 
-  // Modo voz: fala a última resposta do agente e depois abre o microfone.
   useEffect(() => {
+    if (!isVoice || lk !== 'unknown' || (state?.status !== 'CONSENTED' && state?.status !== 'IN_PROGRESS')) return;
+    api(`/interviews/${id}/voice-token`, { method: 'POST' })
+      .then(() => setLk('yes'))
+      .catch((e) => setLk(e instanceof ApiError && e.status === 501 ? 'no' : 'yes'));
+  }, [isVoice, lk, state?.status, id]);
+
+  // Modo voz sem LiveKit: fala a última resposta do agente e depois abre o microfone.
+  useEffect(() => {
+    if (lk !== 'no') return;
     if (!isVoice || sending || muted || state?.status !== 'IN_PROGRESS') return;
     const last = state.turns[state.turns.length - 1];
     if (!last || last.speaker !== 'AGENT' || lastSpoken.current === `t${last.seq}`) return;
     lastSpoken.current = `t${last.seq}`;
     voice.speak(last.text, () => voice.listen());
-  }, [isVoice, sending, muted, state, voice]);
+  }, [lk, isVoice, sending, muted, state, voice]);
 
   // Depois do consentimento, o agente abre a conversa.
   useEffect(() => {
-    if (state?.status === 'CONSENTED' && !kickedOff.current) {
+    if (state?.status === 'CONSENTED' && !kickedOff.current && (!isVoice || lk === 'no')) {
       kickedOff.current = true;
       talk('');
     }
-  }, [state?.status, talk]);
+  }, [state?.status, talk, isVoice, lk]);
 
   const close = async () => {
     if (state?.status === 'IN_PROGRESS') {
@@ -246,7 +257,8 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
           {state.status === 'IN_PROGRESS' || state.status === 'CONSENTED' ? (
             <div className="border-t border-gray-200 bg-white px-4 py-3">
               <div className="mx-auto flex max-w-2xl flex-col gap-2">
-                {isVoice ? (
+                {isVoice && lk === 'yes' ? <VoiceRoom interviewId={id} onNeedRefresh={load} /> : null}
+                {isVoice && lk === 'no' ? (
                   <div className="flex flex-col items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm">
                     {!voice.supported ? (
                       <p className="text-amber-700">Este navegador não suporta voz. Use o Chrome ou o Edge, ou responda por escrito abaixo.</p>
