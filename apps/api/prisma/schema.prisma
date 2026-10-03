@@ -1,0 +1,250 @@
+// Modelo de dados do Agente Entrevistador (proposta de integração, out/2026).
+// Tudo acima do bloco "SIMULAÇÃO DA PLATAFORMA" migra para a plataforma como está.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RubricStatus {
+  DRAFT
+  APPROVED
+  RETIRED
+}
+
+enum InterviewStatus {
+  CREATED
+  CONSENTED
+  IN_PROGRESS
+  PAUSED
+  COMPLETED
+  EVALUATING
+  READY_FOR_REVIEW
+  REVIEWED
+  EXPIRED
+  CANCELLED
+}
+
+enum InterviewMode {
+  TEXT
+  VOICE
+}
+
+enum VoicePref {
+  MALE
+  FEMALE
+  RANDOM
+}
+
+enum Speaker {
+  AGENT
+  CANDIDATE
+}
+
+enum Block {
+  OPENING
+  TRAJECTORY
+  TECHNICAL
+  CULTURAL
+  EXPECTATION
+  CLOSING
+}
+
+enum ReviewDecision {
+  CONFIRMED
+  ADJUSTED
+  INVALIDATED
+}
+
+model Skill {
+  id          String        @id @default(uuid())
+  slug        String        @unique // "csharp-backend", "scrum-master"
+  name        String
+  description String?
+  rubrics     SkillRubric[]
+  interviews  Interview[]
+}
+
+model SkillRubric {
+  id            String       @id @default(uuid())
+  skillId       String
+  version       Int
+  status        RubricStatus @default(DRAFT)
+  promptVersion String // versão do prompt que gerou o rascunho
+  approvedById  String?
+  approvedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  skill         Skill        @relation(fields: [skillId], references: [id])
+  competencies  Competency[]
+  interviews    Interview[]
+
+  @@unique([skillId, version])
+}
+
+model Competency {
+  id              String            @id @default(uuid())
+  rubricId        String
+  key             String // "async-await", "facilitacao"
+  name            String
+  kind            String // "TECHNICAL" | "BEHAVIORAL"
+  weight          Int
+  levels          Json // descritores das notas 1 a 4
+  anchorQuestions Json // perguntas-âncora aprovadas
+  rubric          SkillRubric       @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  evidences       Evidence[]
+  scores          CompetencyScore[]
+
+  @@unique([rubricId, key])
+}
+
+model Interview {
+  id            String          @id @default(uuid())
+  candidateId   String // User da plataforma
+  skillId       String
+  rubricId      String // sempre uma versão APPROVED
+  jobOpeningId  String? // fase 2
+  status        InterviewStatus @default(CREATED)
+  mode          InterviewMode   @default(TEXT)
+  voicePref     VoicePref?
+  consentAt     DateTime?
+  consentText   String? // texto exato aceito
+  startedAt     DateTime?
+  endedAt       DateTime?
+  endReason     String?
+  roomName      String? // sala LiveKit (modo voz)
+  expiresAt     DateTime
+  // Controle de tempo da PoC: o relógio só corre enquanto a entrevista está ativa.
+  currentBlock  Block           @default(OPENING)
+  blockStartMs  Int             @default(0)
+  activeMs      Int             @default(0)
+  resumedAt     DateTime?
+  createdAt     DateTime        @default(now())
+  skill         Skill           @relation(fields: [skillId], references: [id])
+  rubric        SkillRubric     @relation(fields: [rubricId], references: [id])
+  turns         InterviewTurn[]
+  evidences     Evidence[]
+  scores        CompetencyScore[]
+  events        AgentEvent[]
+  report        InterviewReport?
+  reviews       HumanReview[]
+  contestations Contestation[]
+  recording     Recording?
+
+  @@index([skillId, status])
+  @@index([candidateId])
+}
+
+model InterviewTurn {
+  id          String     @id @default(uuid())
+  interviewId String
+  seq         Int
+  speaker     Speaker
+  block       Block
+  text        String
+  startMs     Int // ms desde o início da entrevista
+  endMs       Int
+  interview   Interview  @relation(fields: [interviewId], references: [id])
+  evidences   Evidence[]
+
+  @@unique([interviewId, seq])
+}
+
+model Evidence {
+  id           String        @id @default(uuid())
+  interviewId  String
+  competencyId String
+  turnId       String
+  quote        String // trecho literal
+  note         String?
+  source       String // "INTERVIEWER" | "EVALUATOR"
+  createdAt    DateTime      @default(now())
+  interview    Interview     @relation(fields: [interviewId], references: [id])
+  competency   Competency    @relation(fields: [competencyId], references: [id])
+  turn         InterviewTurn @relation(fields: [turnId], references: [id])
+}
+
+model CompetencyScore {
+  id            String     @id @default(uuid())
+  interviewId   String
+  competencyId  String
+  score         Int? // 1 a 4; null = N/A (não explorado)
+  justification String
+  evidenceIds   String[]
+  interview     Interview  @relation(fields: [interviewId], references: [id])
+  competency    Competency @relation(fields: [competencyId], references: [id])
+
+  @@unique([interviewId, competencyId])
+}
+
+model InterviewReport {
+  id            String    @id @default(uuid())
+  interviewId   String    @unique
+  weightedScore Decimal?  @db.Decimal(4, 2) // só sobre competências pontuadas
+  coverage      Decimal   @db.Decimal(4, 3) // % do peso efetivamente explorado
+  summary       String
+  pointsToCheck Json
+  model         String // id do modelo Claude usado
+  promptVersion String
+  createdAt     DateTime  @default(now())
+  interview     Interview @relation(fields: [interviewId], references: [id])
+}
+
+model HumanReview {
+  id          String         @id @default(uuid())
+  interviewId String
+  reviewerId  String
+  decision    ReviewDecision
+  adjustments Json? // notas alteradas e motivo
+  notes       String?
+  createdAt   DateTime       @default(now())
+  interview   Interview      @relation(fields: [interviewId], references: [id])
+}
+
+model AgentEvent {
+  // log auditável de ferramentas e decisões
+  id          BigInt    @id @default(autoincrement())
+  interviewId String
+  type        String // "tool_call", "block_change", "llm_call", "error"...
+  payload     Json
+  at          DateTime  @default(now())
+  interview   Interview @relation(fields: [interviewId], references: [id])
+
+  @@index([interviewId, at])
+}
+
+model Recording {
+  id          String    @id @default(uuid())
+  interviewId String    @unique
+  storageKey  String
+  deleteAfter DateTime // política de retenção
+  deletedAt   DateTime?
+  interview   Interview @relation(fields: [interviewId], references: [id])
+}
+
+model Contestation {
+  id          String    @id @default(uuid())
+  interviewId String
+  text        String
+  status      String    @default("OPEN")
+  answer      String?
+  dueAt       DateTime
+  createdAt   DateTime  @default(now())
+  interview   Interview @relation(fields: [interviewId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// SIMULAÇÃO DA PLATAFORMA (remover na migração)
+// Na plataforma real, User e o histórico do profissional já existem; aqui são
+// stand-ins para a PoC rodar isolada.
+// ---------------------------------------------------------------------------
+
+model MockUser {
+  id      String @id // "ana", "bruno", "rita", "admin"
+  name    String
+  role    String // "CANDIDATE" | "REVIEWER" | "ADMIN"
+  history Json // histórico do profissional na plataforma (sem CV)
+}
