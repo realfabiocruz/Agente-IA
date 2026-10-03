@@ -23,7 +23,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     setId(getUserId());
     api<MockUser[]>('/mock-users')
       .then(setUsers)
-      .catch(() => setError('Não foi possível falar com a API. Ela está rodando em ' + (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001') + '?'))
+      .catch(() => setError('Não foi possível falar com a API. Confira se ela está rodando (npm run dev:api).'))
       .finally(() => setReady(true));
   }, []);
 

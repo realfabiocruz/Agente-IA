@@ -4,13 +4,23 @@ Prova de conceito da etapa 2 da [proposta de integração](https://claude.ai/cod
 
 Roda isolada da plataforma, com a mesma stack (Next.js + TypeScript + Tailwind, NestJS + TypeScript + Prisma, Postgres 16), para migrar depois como módulo. Login e histórico do profissional são simulados.
 
-## Como rodar
+## Rodar no navegador (GitHub Codespaces), sem instalar nada
+
+1. No GitHub, abra o repositório no branch da PoC e clique em **Code → Codespaces → Create codespace**.
+2. Na criação, o GitHub pede o segredo `ANTHROPIC_API_KEY`. Cole sua chave para usar o Claude de verdade, ou deixe em branco para o modo simulado. A chave fica guardada nos segredos do Codespaces, nunca no repositório (dá para mudar depois em github.com/settings/codespaces).
+3. Espere a preparação (instala dependências, cria o banco Postgres 16, carrega os dados de exemplo e compila; leva alguns minutos na primeira vez).
+4. A aba **Ports** abre a porta 3000 ("Entrevistador") no navegador. Se não abrir sozinha, clique no ícone de globo dela.
+
+Para ver os logs: `tail -f /tmp/api.log /tmp/web.log` no terminal do Codespace. Para reiniciar depois de mudar código: `npm run build && bash .devcontainer/start.sh`.
+
+## Como rodar no seu computador
 
 Pré-requisitos: Node 22+, Docker (ou um Postgres 16 local).
 
 ```bash
 cp .env.example apps/api/.env   # ajuste DATABASE_URL se não usar o docker; ANTHROPIC_API_KEY é opcional
 npm install
+npm run prisma:generate -w apps/api
 npm run db:up                   # Postgres 16 no docker
 npm run db:migrate              # cria as tabelas
 npm run db:seed                 # skill C# back-end com rubrica v1, Scrum Master sem rubrica, usuários simulados

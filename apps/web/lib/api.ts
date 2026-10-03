@@ -1,6 +1,6 @@
 'use client';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 const USER_KEY = 'whizz.mockUser';
 
 /** Login simulado: o id do usuário fica no navegador e vai no header x-user-id. */
