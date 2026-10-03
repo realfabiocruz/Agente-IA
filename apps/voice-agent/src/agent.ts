@@ -32,17 +32,31 @@ class InterviewAgent extends voice.Agent {
     const lastUser = [...chatCtx.items].reverse().find((i) => i.type === 'message' && i.role === 'user');
     const text = lastUser && lastUser.type === 'message' ? (lastUser.textContent ?? '').trim() : '';
     const { meta } = this;
+    const abort = new AbortController();
+    let closed = false;
     const stream = new ReadableStream<string>({
       start: async (controller) => {
+        const push = (t: string) => {
+          if (!closed) controller.enqueue(t);
+        };
         try {
-          const result = await streamMessage(meta.userId, meta.interviewId, text, (d) => controller.enqueue(d));
+          const result = await streamMessage(meta.userId, meta.interviewId, text, push, abort.signal);
           this.ended = result.ended;
         } catch (e) {
-          console.error('[voz] falha ao falar com a API', e);
-          controller.enqueue('Tive um problema de conexão. Pode repetir, por favor?');
+          if (!abort.signal.aborted) {
+            console.error('[voz] falha ao falar com a API', e);
+            push('Tive um problema de conexão. Pode repetir, por favor?');
+          }
         } finally {
-          controller.close();
+          if (!closed) {
+            closed = true;
+            controller.close();
+          }
         }
+      },
+      cancel: () => {
+        closed = true;
+        abort.abort();
       },
     });
     return stream as unknown as Awaited<ReturnType<voice.Agent['llmNode']>>;
@@ -63,6 +77,8 @@ export default defineAgent({
       stt: new inference.STT({ model: 'deepgram/nova-3', language: 'pt-BR' }),
       // O LLM é obrigatório no pipeline, mas llmNode o substitui pela API.
       llm: new inference.LLM({ model: 'openai/gpt-4.1-mini' }),
+      // O backend guarda cada fala e não é idempotente: nada de gerar resposta antes de a vez fechar.
+      turnHandling: { preemptiveGeneration: { enabled: false } },
       tts: new inference.TTS({ model: 'gradium/default', voice: pickVoice(meta.voicePref, meta.interviewId), language: 'pt' }),
     });
     const agent = new InterviewAgent(meta);
