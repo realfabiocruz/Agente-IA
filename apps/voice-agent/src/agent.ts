@@ -88,4 +88,12 @@ export default defineAgent({
   },
 });
 
-cli.runApp(new ServerOptions({ agent: fileURLToPath(import.meta.url) }));
+// Instância pequena (pouca CPU e memória): um processo de trabalho pré-aquecido
+// e tempo folgado para ele iniciar, senão a inicialização estoura os 10s padrão.
+cli.runApp(
+  new ServerOptions({
+    agent: fileURLToPath(import.meta.url),
+    numIdleProcesses: 1,
+    initializeProcessTimeout: 120_000,
+  }),
+);
