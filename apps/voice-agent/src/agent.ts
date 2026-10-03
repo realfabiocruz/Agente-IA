@@ -95,5 +95,7 @@ cli.runApp(
     agent: fileURLToPath(import.meta.url),
     numIdleProcesses: 1,
     initializeProcessTimeout: 120_000,
+    // Em serviço web do Render o processo precisa abrir a porta $PORT.
+    port: Number(process.env.PORT ?? 8081),
   }),
 );
