@@ -304,16 +304,18 @@ export class InterviewsService {
     return { status: 'IN_PROGRESS' };
   }
 
-  async finish(user: CurrentUser, id: string, reason = 'pedido_do_candidato') {
+  async finish(user: CurrentUser, id: string, reason: 'pedido_do_candidato' | 'rota_humana' = 'pedido_do_candidato') {
     const iv = await this.load(id);
     this.assertOwner(user, iv.candidateId);
-    if (!['CONSENTED', 'IN_PROGRESS', 'PAUSED'].includes(iv.status))
+    if (!['CREATED', 'CONSENTED', 'IN_PROGRESS', 'PAUSED'].includes(iv.status))
       throw new ConflictException(`Não é possível encerrar no estado ${iv.status}`);
+    // Rota humana: a pessoa será avaliada por alguém da equipe, sem dossiê do agente.
     const hasTurns = (await this.prisma.interviewTurn.count({ where: { interviewId: id } })) > 0;
+    const evaluate = hasTurns && reason !== 'rota_humana';
     await this.prisma.interview.update({
       where: { id },
       data: {
-        status: hasTurns ? 'COMPLETED' : 'CANCELLED',
+        status: evaluate ? 'COMPLETED' : 'CANCELLED',
         endedAt: new Date(),
         endReason: reason,
         activeMs: elapsedMs(iv),
@@ -321,8 +323,8 @@ export class InterviewsService {
       },
     });
     await this.event(id, 'finished', { reason, by: 'candidate' });
-    if (hasTurns) await this.queue.send(EVALUATE_QUEUE, { interviewId: id });
-    return { status: hasTurns ? 'COMPLETED' : 'CANCELLED' };
+    if (evaluate) await this.queue.send(EVALUATE_QUEUE, { interviewId: id });
+    return { status: evaluate ? 'COMPLETED' : 'CANCELLED' };
   }
 
   async contest(user: CurrentUser, id: string, text: string) {

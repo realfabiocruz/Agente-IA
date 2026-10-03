@@ -1,6 +1,10 @@
 import 'reflect-metadata';
+import { existsSync } from 'node:fs';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+
+// Lê apps/api/.env quando existir (Node 22+), sem dependência extra.
+if (existsSync('.env')) process.loadEnvFile('.env');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

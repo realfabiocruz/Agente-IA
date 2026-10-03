@@ -14,7 +14,10 @@ const ConsentBody = z.object({
   voicePref: z.enum(['MALE', 'FEMALE', 'RANDOM']).optional(),
 });
 const MessageBody = z.object({ text: z.string().max(4000).default('') });
-const ContestBody = z.object({ text: z.string().min(10).max(4000) });
+const FinishBody = z
+  .object({ reason: z.enum(['pedido_do_candidato', 'rota_humana']).default('pedido_do_candidato') })
+  .default({ reason: 'pedido_do_candidato' });
+const ContestBody =z.object({ text: z.string().min(10).max(4000) });
 const ReviewBody = z.object({
   decision: z.enum(['CONFIRMED', 'ADJUSTED', 'INVALIDATED']),
   adjustments: z
@@ -104,8 +107,12 @@ export class InterviewsController {
 
   @Roles('CANDIDATE')
   @Post(':id/finish')
-  finish(@User() user: CurrentUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.interviews.finish(user, id);
+  finish(
+    @User() user: CurrentUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodPipe(FinishBody)) body: z.infer<typeof FinishBody>,
+  ) {
+    return this.interviews.finish(user, id, body.reason);
   }
 
   @Roles('CANDIDATE')
