@@ -88,9 +88,13 @@ Tudo que é simulado está isolado para ser trocado:
 - **Usuários**: o modelo `MockUser` no fim do `schema.prisma`; `Interview.candidateId` já é só o id do `User` da plataforma, sem relação, para a migração não depender dele.
 - **Front**: `apps/web/components/user-context.tsx` e o seletor do cabeçalho. As rotas `entrevistas/[id]` e `@modal/(.)entrevistas/[id]` copiam direto para o App Router da plataforma.
 
+## Modo voz (primeira versão)
+
+No termo de consentimento dá para escolher **Voz**. O navegador (Chrome ou Edge) transcreve a fala e lê as respostas do agente em voz alta (Web Speech API, `apps/web/components/use-voice.ts`); o entrevistador é o mesmo do modo texto, com um prompt ajustado para fala. Não há gravação de áudio nem análise de tom. É só para validar a experiência: a qualidade das vozes depende do navegador. Para produção, a proposta segue com LiveKit Agents e STT/TTS de um provedor, mantendo esta API.
+
 ## Fora desta PoC
 
-- Modo voz (LiveKit Agents) e o endpoint interno `/internal/interviews/:id/events` do worker de voz: etapa 3.
+- Voz de produção (LiveKit Agents, imagem) e o endpoint interno `/internal/interviews/:id/events` do worker de voz: etapa 3.
 - Vaga atrelada com blocos cultural e expectativa: fase 2 (o plano de blocos já existe em `plan.ts`, mas a API recusa `jobOpeningId`).
 - Feature flag, guards reais, retenção de gravações (`Recording`) e painel de resposta a contestações.
 - A trava contra mensagens simultâneas é em memória (uma instância); com mais réplicas, trocar por trava no banco.

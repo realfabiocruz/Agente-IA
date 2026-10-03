@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api, ApiError, sendMessage } from '@/lib/api';
 import { STATUS_LABEL, type InterviewState } from '@/lib/types';
 import { useUser } from './user-context';
+import { useVoice } from './use-voice';
 
 type Bubble = { key: string; speaker: 'AGENT' | 'CANDIDATE'; text: string; pending?: boolean };
 
@@ -31,6 +32,11 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
   const [loadedAt, setLoadedAt] = useState(() => Date.now());
   const kickedOff = useRef(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastSpoken = useRef<string | null>(null);
+  const [muted, setMuted] = useState(false);
+  const isVoice = state?.mode === 'VOICE';
+  const talkRef = useRef<(t: string) => void>(() => {});
+  const voice = useVoice(state?.voicePref ?? 'RANDOM', (t) => talkRef.current(t));
 
   const load = useCallback(async () => {
     try {
@@ -94,6 +100,19 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
     },
     [id, load],
   );
+
+  talkRef.current = (t: string) => {
+    if (!sending) talk(t);
+  };
+
+  // Modo voz: fala a última resposta do agente e depois abre o microfone.
+  useEffect(() => {
+    if (!isVoice || sending || muted || state?.status !== 'IN_PROGRESS') return;
+    const last = state.turns[state.turns.length - 1];
+    if (!last || last.speaker !== 'AGENT' || lastSpoken.current === `t${last.seq}`) return;
+    lastSpoken.current = `t${last.seq}`;
+    voice.speak(last.text, () => voice.listen());
+  }, [isVoice, sending, muted, state, voice]);
 
   // Depois do consentimento, o agente abre a conversa.
   useEffect(() => {
@@ -227,6 +246,37 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
           {state.status === 'IN_PROGRESS' || state.status === 'CONSENTED' ? (
             <div className="border-t border-gray-200 bg-white px-4 py-3">
               <div className="mx-auto flex max-w-2xl flex-col gap-2">
+                {isVoice ? (
+                  <div className="flex flex-col items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm">
+                    {!voice.supported ? (
+                      <p className="text-amber-700">Este navegador não suporta voz. Use o Chrome ou o Edge, ou responda por escrito abaixo.</p>
+                    ) : (
+                      <>
+                        <p className="text-gray-700" aria-live="polite">
+                          {sending ? 'O agente está respondendo…' : voice.speaking ? 'O agente está falando…' : voice.listening ? (voice.interim ? `“${voice.interim}”` : 'Ouvindo você…') : 'Microfone desligado'}
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => (voice.listening ? voice.stopListening() : voice.listen())}
+                            disabled={sending}
+                            className={`rounded-full px-4 py-2 font-medium text-white disabled:opacity-40 ${voice.listening ? 'bg-red-600' : 'bg-brand-600'}`}
+                          >
+                            {voice.listening ? 'Parar de ouvir' : 'Falar'}
+                          </button>
+                          {voice.speaking ? (
+                            <button onClick={() => { voice.cancelSpeech(); voice.listen(); }} className="rounded-full border border-gray-300 px-4 py-2">
+                              Pular fala do agente
+                            </button>
+                          ) : null}
+                          <button onClick={() => { setMuted(!muted); voice.cancelSpeech(); }} className="rounded-full border border-gray-300 px-4 py-2">
+                            {muted ? 'Ativar voz do agente' : 'Silenciar agente'}
+                          </button>
+                        </div>
+                        {voice.micError ? <p className="text-red-700">{voice.micError}</p> : null}
+                      </>
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex gap-2">
                   <textarea
                     value={draft}
@@ -239,7 +289,7 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
                     }}
                     rows={2}
                     maxLength={4000}
-                    placeholder="Escreva sua resposta (Enter envia, Shift+Enter quebra linha)"
+                    placeholder={isVoice ? 'Ou escreva sua resposta, se preferir' : 'Escreva sua resposta (Enter envia, Shift+Enter quebra linha)'}
                     className="flex-1 resize-none rounded-lg border border-gray-300 px-3 py-2 focus:border-brand-500 focus:outline-none"
                     disabled={sending}
                     aria-label="Sua resposta"
@@ -271,6 +321,7 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
 
 function Consent({ state, onDone, onHuman }: { state: InterviewState; onDone: () => void; onHuman: () => void }) {
   const [accepted, setAccepted] = useState(false);
+  const [mode, setMode] = useState<'TEXT' | 'VOICE'>('TEXT');
   const [voicePref, setVoicePref] = useState<'MALE' | 'FEMALE' | 'RANDOM'>('RANDOM');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -278,7 +329,7 @@ function Consent({ state, onDone, onHuman }: { state: InterviewState; onDone: ()
   const start = async () => {
     setBusy(true);
     try {
-      await api(`/interviews/${state.id}/consent`, { method: 'POST', body: { accepted: true, mode: 'TEXT', voicePref } });
+      await api(`/interviews/${state.id}/consent`, { method: 'POST', body: { accepted: true, mode, voicePref } });
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -305,11 +356,14 @@ function Consent({ state, onDone, onHuman }: { state: InterviewState; onDone: ()
           <fieldset>
             <legend className="mb-1 text-sm font-medium">Modo</legend>
             <label className="mr-4 text-sm">
-              <input type="radio" checked readOnly className="mr-1" /> Texto
+              <input type="radio" name="mode" checked={mode === 'TEXT'} onChange={() => setMode('TEXT')} className="mr-1" /> Texto
             </label>
-            <label className="text-sm text-gray-400" title="Disponível na próxima etapa da PoC">
-              <input type="radio" disabled className="mr-1" /> Voz (em breve)
+            <label className="text-sm">
+              <input type="radio" name="mode" checked={mode === 'VOICE'} onChange={() => setMode('VOICE')} className="mr-1" /> Voz
             </label>
+            {mode === 'VOICE' ? (
+              <p className="mt-1 text-xs text-gray-500">Use o Chrome ou o Edge e permita o microfone. A conversa é por voz, sem gravação de áudio.</p>
+            ) : null}
           </fieldset>
           <fieldset>
             <legend className="mb-1 text-sm font-medium">Voz do agente (para o modo voz)</legend>

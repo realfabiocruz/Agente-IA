@@ -40,6 +40,8 @@ export interface InterviewListItem {
 export interface InterviewState {
   id: string;
   status: InterviewStatus;
+  mode: 'TEXT' | 'VOICE';
+  voicePref: 'MALE' | 'FEMALE' | 'RANDOM' | null;
   skill: { id: string; name: string };
   rubricVersion: number;
   block: string;

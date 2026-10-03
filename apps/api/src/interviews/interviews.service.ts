@@ -85,6 +85,7 @@ export class InterviewsService {
       id: iv.id,
       status: iv.status,
       mode: iv.mode,
+      voicePref: iv.voicePref,
       skill: { id: iv.skill.id, name: iv.skill.name },
       rubricVersion: iv.rubric.version,
       block: iv.currentBlock,
@@ -105,7 +106,6 @@ export class InterviewsService {
     const iv = await this.load(id);
     this.assertOwner(user, iv.candidateId);
     if (iv.status !== 'CREATED') throw new ConflictException('Consentimento já registrado');
-    if (body.mode === 'VOICE') throw new BadRequestException('Modo voz ainda não está disponível nesta PoC');
     await this.prisma.$transaction([
       this.prisma.interview.update({
         where: { id },
@@ -189,6 +189,7 @@ export class InterviewsService {
       this.platform.getCandidateHistory(iv.candidateId),
     ]);
     const systemPrompt = interviewerSystemPrompt({
+      mode: iv.mode as 'TEXT' | 'VOICE',
       rubric: { skillName: iv.skill.name, version: iv.rubric.version, competencies },
       plan,
       candidateName,

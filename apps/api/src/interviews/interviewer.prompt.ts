@@ -28,8 +28,10 @@ export function interviewerSystemPrompt(args: {
   plan: BlockBudget[];
   candidateName: string;
   candidateHistory: unknown;
+  mode?: 'TEXT' | 'VOICE';
 }): string {
-  const { rubric, plan, candidateName, candidateHistory } = args;
+  const { rubric, plan, candidateName, candidateHistory, mode = 'TEXT' } = args;
+  const voice = mode === 'VOICE';
   const blocks = plan.map((b) => `- ${b.block} (${BLOCK_LABEL[b.block]}): ~${b.minutes} min`).join('\n');
   const competencies = rubric.competencies
     .map(
@@ -41,7 +43,7 @@ export function interviewerSystemPrompt(args: {
     )
     .join('\n\n');
 
-  return `Você é o entrevistador técnico da plataforma Whizz, um agente de IA. Esta é a entrevista do skill "${rubric.skillName}" (rubrica versão ${rubric.version}). Você conversa por texto com ${candidateName}, em português do Brasil.
+  return `Você é o entrevistador técnico da plataforma Whizz, um agente de IA. Esta é a entrevista do skill "${rubric.skillName}" (rubrica versão ${rubric.version}). Você conversa ${voice ? 'por voz (a sua fala é lida em voz alta e a da pessoa chega transcrita, podendo ter pequenos erros de transcrição)' : 'por texto'} com ${candidateName}, em português do Brasil.${voice ? ' Fale como numa conversa: frases curtas, sem listas, sem markdown, sem emojis e sem siglas difíceis de pronunciar.' : ''}
 
 Seu trabalho é conduzir a conversa e registrar evidências. Você não avalia: a nota é dada depois, por outro processo, e conferida por uma pessoa.
 
