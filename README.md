@@ -13,6 +13,10 @@ Roda isolada da plataforma, com a mesma stack (Next.js + TypeScript + Tailwind, 
 
 Para ver os logs: `tail -f /tmp/api.log /tmp/web.log` no terminal do Codespace. Para reiniciar depois de mudar código: `npm run build && bash .devcontainer/start.sh`.
 
+## Publicar no Render
+
+O `render.yaml` na raiz descreve um Postgres 16 e um serviço que roda o site e a API juntos (o site repassa `/api` para a API). No Render: **New → Blueprint**, escolha este repositório e informe `ANTHROPIC_API_KEY` (opcional; sem ela roda em modo simulado). A preparação roda as migrações e o seed. Para o site em um serviço separado (por exemplo no Vercel), aponte `API_INTERNAL_URL` para o endereço público da API na hora do build.
+
 ## Como rodar no seu computador
 
 Pré-requisitos: Node 22+, Docker (ou um Postgres 16 local).

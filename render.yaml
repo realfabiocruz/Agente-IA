@@ -1,0 +1,27 @@
+# Blueprint do Render: um serviço (site + API) e um Postgres 16.
+# No Render: New → Blueprint → escolha este repositório.
+databases:
+  - name: whizz-poc-db
+    plan: free
+    postgresMajorVersion: "16"
+    databaseName: whizz
+
+services:
+  - type: web
+    name: whizz-entrevistador-poc
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run prisma:generate -w apps/api && npm run prisma:deploy -w apps/api && npm run prisma:seed -w apps/api && npm run build
+    startCommand: bash scripts/start-all.sh
+    healthCheckPath: /api/mock-users
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        fromDatabase:
+          name: whizz-poc-db
+          property: connectionString
+      - key: API_INTERNAL_URL
+        value: http://localhost:3001
+      - key: ANTHROPIC_API_KEY
+        sync: false # opcional: sem a chave roda em modo simulado
