@@ -113,6 +113,8 @@ cli.runApp(
     agent: fileURLToPath(import.meta.url),
     numIdleProcesses: 1,
     initializeProcessTimeout: 120_000,
+    // Num deploy, a versão antiga não fica meia hora esperando as salas abertas.
+    drainTimeout: 15_000,
     // Em serviço web do Render o processo precisa abrir a porta $PORT.
     port: Number(process.env.PORT ?? 8081),
   }),
