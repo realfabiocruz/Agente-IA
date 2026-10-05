@@ -20,8 +20,19 @@ function pickVoice(pref: RoomMeta['voicePref'], interviewId: string) {
   return interviewId.charCodeAt(0) % 2 ? MALE_VOICE : FEMALE_VOICE;
 }
 
+// Depois que a vez fecha, espera mais um pouco antes de mandar a resposta para a API. Se a pessoa
+// voltar a falar nesse intervalo (uma pausa para respirar), a fala é somada à anterior e a IA não responde ainda.
+const RESUME_GRACE_MS = 1500;
+
 class InterviewAgent extends voice.Agent {
   ended = false;
+  /** Última atividade da pessoa (início de fala ou transcrição), em ms. */
+  lastUserActivity = 0;
+  /** Falas já fechadas que ainda não foram enviadas à API porque a pessoa continuou falando. */
+  private pending = '';
+  private stallTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Chamado se a pessoa 'retomou' mas ninguém falou depois (transcrição atrasada): responde mesmo assim. */
+  onStall: () => void = () => {};
 
   constructor(private meta: RoomMeta) {
     // As instruções ficam no backend (rubrica, blocos, tempo); aqui só um rótulo.
@@ -30,8 +41,23 @@ class InterviewAgent extends voice.Agent {
 
   override async llmNode(chatCtx: llm.ChatContext) {
     const lastUser = [...chatCtx.items].reverse().find((i) => i.type === 'message' && i.role === 'user');
-    const text = lastUser && lastUser.type === 'message' ? (lastUser.textContent ?? '').trim() : '';
+    let text = lastUser && lastUser.type === 'message' ? (lastUser.textContent ?? '').trim() : '';
     const { meta } = this;
+    clearTimeout(this.stallTimer);
+    if (text) {
+      const waitFrom = Date.now();
+      while (Date.now() - waitFrom < RESUME_GRACE_MS && this.lastUserActivity <= waitFrom) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      if (this.lastUserActivity > waitFrom) {
+        // A pessoa continuou: guarda o que já disse e não responde; a próxima vez fechada envia tudo junto.
+        this.pending = text.startsWith(this.pending) ? text : `${this.pending} ${text}`.trim();
+        this.stallTimer = setTimeout(() => this.onStall(), 6000);
+        return new ReadableStream<string>({ start: (c) => c.close() }) as unknown as Awaited<ReturnType<voice.Agent['llmNode']>>;
+      }
+      if (this.pending && !text.startsWith(this.pending)) text = `${this.pending} ${text}`.trim();
+      this.pending = '';
+    }
     const abort = new AbortController();
     let closed = false;
     const stream = new ReadableStream<string>({
@@ -80,17 +106,27 @@ export default defineAgent({
       // O backend guarda cada fala e não é idempotente: nada de gerar resposta antes de a vez fechar.
       // CPU pequena: sem o VAD local (Silero) e sem gravação (ffmpeg); o fim da fala vem da transcrição.
       vad: null,
-      // Entrevista: o candidato responde com calma, então espera 2s de silêncio antes de fechar a vez
-      // (o padrão de 0,5s picotava a resposta em várias falas) e o agente não é cortado por ruído.
+      // Entrevista: o candidato responde com calma e precisa poder respirar. Espera 2,5s de silêncio para
+      // fechar a vez (o padrão de 0,5s picotava a resposta) e o llmNode ainda dá mais 1,5s de tolerância.
       turnHandling: {
         turnDetection: 'stt',
-        endpointing: { mode: 'fixed', minDelay: 2000, maxDelay: 6000 },
+        endpointing: { mode: 'fixed', minDelay: 2500, maxDelay: 8000 },
         interruption: { enabled: false },
         preemptiveGeneration: { enabled: false },
       },
       tts: new inference.TTS({ model: 'gradium/default', voice: pickVoice(meta.voicePref, meta.interviewId), language: 'pt' }),
     });
     const agent = new InterviewAgent(meta);
+    agent.onStall = () => session.generateReply();
+
+    // Qualquer sinal de fala da pessoa marca atividade, para o llmNode saber se ela retomou a fala.
+    const touch = () => {
+      agent.lastUserActivity = Date.now();
+    };
+    session.on(voice.AgentSessionEventTypes.UserInputTranscribed, touch);
+    session.on(voice.AgentSessionEventTypes.UserStateChanged, (ev) => {
+      if (ev.newState === 'speaking') touch();
+    });
 
     // Fechar a aba ou perder a conexão pausa a entrevista, como no modo texto.
     ctx.room.on('participantDisconnected', () => {
