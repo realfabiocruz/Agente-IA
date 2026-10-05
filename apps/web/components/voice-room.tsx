@@ -3,21 +3,35 @@
 import { useEffect, useRef, useState } from 'react';
 import { Room, RoomEvent, Track } from 'livekit-client';
 import { api } from '@/lib/api';
+import { InterviewerAvatar, type AvatarSample } from './interviewer-avatar';
 
 type Phase = 'connecting' | 'live' | 'error';
 
+// "Aleatória" usa a mesma regra do worker de voz (paridade do 1º caractere do id), para o rosto combinar com a voz.
 /**
  * Sala de voz da entrevista (LiveKit). O navegador só publica o microfone e
  * toca o áudio do agente; a conversa em si acontece no worker de voz, que usa a
  * mesma API do modo texto. A transcrição aparece na tela pelo estado da entrevista.
  */
-export function VoiceRoom({ interviewId, onNeedRefresh }: { interviewId: string; onNeedRefresh: () => void }) {
+export function VoiceRoom({
+  interviewId,
+  onNeedRefresh,
+  voicePref,
+}: {
+  interviewId: string;
+  onNeedRefresh: () => void;
+  voicePref?: 'MALE' | 'FEMALE' | 'RANDOM' | null;
+}) {
   const [phase, setPhase] = useState<Phase>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [speakerActive, setSpeakerActive] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const roomRef = useRef<Room | null>(null);
   const audioRef = useRef<HTMLDivElement>(null);
+  const phaseRef = useRef<Phase>('connecting');
+  phaseRef.current = phase;
+  const lastUserSpeech = useRef(0);
+  const lastAgentSpeech = useRef(0);
   const refresh = useRef(onNeedRefresh);
   refresh.current = onNeedRefresh;
 
@@ -64,6 +78,22 @@ export function VoiceRoom({ interviewId, onNeedRefresh }: { interviewId: string;
     };
   }, [interviewId]);
 
+  // Amostra para o avatar: volume da IA (boca) e o momento da conversa (falando, ouvindo, pensando).
+  const sample = (): AvatarSample => {
+    const room = roomRef.current;
+    if (!room || phaseRef.current !== 'live') return { mode: 'connecting', level: 0 };
+    const now = performance.now();
+    let agentLevel = 0;
+    room.remoteParticipants.forEach((p) => (agentLevel = Math.max(agentLevel, p.audioLevel)));
+    if (agentLevel > 0.01) lastAgentSpeech.current = now;
+    if (room.localParticipant.audioLevel > 0.02) lastUserSpeech.current = now;
+    if (now - lastAgentSpeech.current < 400) return { mode: 'speaking', level: agentLevel };
+    if (now - lastUserSpeech.current < 1200) return { mode: 'listening', level: 0 };
+    // A pessoa falou há pouco e a IA ainda não respondeu: está processando a resposta.
+    if (lastUserSpeech.current > lastAgentSpeech.current && now - lastUserSpeech.current < 12000) return { mode: 'thinking', level: 0 };
+    return { mode: 'idle', level: 0 };
+  };
+
   const toggleMic = async () => {
     const next = !micOn;
     await roomRef.current?.localParticipant.setMicrophoneEnabled(next);
@@ -73,6 +103,7 @@ export function VoiceRoom({ interviewId, onNeedRefresh }: { interviewId: string;
   return (
     <div className="flex flex-col items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm">
       <div ref={audioRef} className="hidden" />
+      <InterviewerAvatar sample={sample} tone={voicePref === 'FEMALE' || voicePref === 'MALE' ? voicePref : interviewId.charCodeAt(0) % 2 ? 'MALE' : 'FEMALE'} />
       {phase === 'error' ? (
         <p className="text-red-700">{error ?? 'A conexão de voz caiu. Pause e retome a entrevista para reconectar, ou responda por escrito.'}</p>
       ) : (

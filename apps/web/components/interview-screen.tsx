@@ -257,7 +257,7 @@ export function InterviewScreen({ id, overlay = false }: { id: string; overlay?:
           {state.status === 'IN_PROGRESS' || state.status === 'CONSENTED' ? (
             <div className="border-t border-gray-200 bg-white px-4 py-3">
               <div className="mx-auto flex max-w-2xl flex-col gap-2">
-                {isVoice && lk === 'yes' ? <VoiceRoom interviewId={id} onNeedRefresh={load} /> : null}
+                {isVoice && lk === 'yes' ? <VoiceRoom interviewId={id} onNeedRefresh={load} voicePref={state.voicePref} /> : null}
                 {isVoice && lk === 'no' ? (
                   <div className="flex flex-col items-center gap-2 rounded-lg bg-gray-50 p-3 text-sm">
                     {!voice.supported ? (
