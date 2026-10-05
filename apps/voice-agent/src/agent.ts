@@ -111,7 +111,10 @@ export default defineAgent({
       turnHandling: {
         turnDetection: 'stt',
         endpointing: { mode: 'fixed', minDelay: 2500, maxDelay: 8000 },
-        interruption: { enabled: false },
+        // Se a pessoa volta a falar com a IA já respondendo, a IA cala e ouve. Sem VAD local, quem decide é a
+        // transcrição: só vale a partir de 3 palavras (ruído e "hum" não cortam). Se a pessoa calar logo depois,
+        // a IA retoma de onde parou.
+        interruption: { enabled: true, mode: 'vad', minWords: 3, minDuration: 300, falseInterruptionTimeout: 2000, resumeFalseInterruption: true },
         preemptiveGeneration: { enabled: false },
       },
       tts: new inference.TTS({ model: 'gradium/default', voice: pickVoice(meta.voicePref, meta.interviewId), language: 'pt' }),
