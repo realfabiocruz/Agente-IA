@@ -1,0 +1,22 @@
+{
+  "name": "Agente IA Whizz",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "Entrevistador", "onAutoForward": "openBrowser" },
+    "3001": { "label": "API", "onAutoForward": "silent" }
+  },
+  "secrets": {
+    "ANTHROPIC_API_KEY": {
+      "description": "Chave da API da Anthropic. Opcional: sem ela a PoC roda em modo simulado.",
+      "documentationUrl": "https://console.anthropic.com/settings/keys"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash .devcontainer/start.sh",
+  "customizations": {
+    "codespaces": { "openFiles": ["README.md"] }
+  }
+}
