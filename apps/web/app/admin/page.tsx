@@ -11,6 +11,8 @@ interface Rubric {
   status: 'DRAFT' | 'APPROVED' | 'RETIRED';
   promptVersion: string;
   approvedById: string | null;
+  questionMode: 'AI_DRIVEN' | 'GUIDED';
+  standardQuestions: string[];
   competencies: { key: string; name: string; kind: string; weight: number; levels: Record<string, string>; anchorQuestions: string[] }[];
 }
 
@@ -101,6 +103,8 @@ function RubricCard({ rubric, busy, run }: { rubric: Rubric; busy: boolean; run:
     ),
   );
   const [editing, setEditing] = useState(false);
+  const [mode, setMode] = useState(rubric.questionMode);
+  const [questions, setQuestions] = useState((rubric.standardQuestions ?? []).join('\n'));
   const badge = { DRAFT: 'bg-amber-100 text-amber-800', APPROVED: 'bg-green-100 text-green-800', RETIRED: 'bg-gray-100 text-gray-600' }[rubric.status];
 
   return (
@@ -124,8 +128,42 @@ function RubricCard({ rubric, busy, run }: { rubric: Rubric; busy: boolean; run:
           </div>
         ) : null}
       </div>
+      <p className="text-sm text-gray-700">
+        <strong>Perguntas:</strong>{' '}
+        {rubric.questionMode === 'GUIDED'
+          ? `começa pelas ${rubric.standardQuestions?.length ?? 0} perguntas padrão e a IA adapta`
+          : 'a IA formula todas as perguntas a partir do tema'}
+      </p>
+      {rubric.status !== 'DRAFT' ? (
+        <button
+          disabled={busy}
+          onClick={() => run(() => api(`/rubrics/${rubric.id}/clone`, { method: 'POST' }))}
+          className="rounded border border-gray-300 px-3 py-1 text-sm"
+        >
+          Criar nova versão a partir desta
+        </button>
+      ) : null}
       {editing ? (
         <div className="space-y-2">
+          <fieldset className="space-y-1 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={mode === 'AI_DRIVEN'} onChange={() => setMode('AI_DRIVEN')} />
+              IA assume as perguntas (livre, conforme o tema)
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" checked={mode === 'GUIDED'} onChange={() => setMode('GUIDED')} />
+              Perguntas padrão primeiro; a IA pode incluir novas e mudar o rumo
+            </label>
+            {mode === 'GUIDED' ? (
+              <textarea
+                value={questions}
+                onChange={(e) => setQuestions(e.target.value)}
+                rows={6}
+                placeholder="Uma pergunta padrão por linha"
+                className="w-full rounded border border-gray-300 p-2 text-sm"
+              />
+            ) : null}
+          </fieldset>
           <textarea
             value={json}
             onChange={(e) => setJson(e.target.value)}
@@ -136,7 +174,12 @@ function RubricCard({ rubric, busy, run }: { rubric: Rubric; busy: boolean; run:
             disabled={busy}
             onClick={() =>
               run(async () => {
-                await api(`/rubrics/${rubric.id}`, { method: 'PATCH', body: { competencies: JSON.parse(json) } });
+                await api(`/rubrics/${rubric.id}`, { method: 'PATCH', body: {
+                    competencies: JSON.parse(json),
+                    questionMode: mode,
+                    standardQuestions: questions.split('\n').map((q) => q.trim()).filter(Boolean),
+                  },
+                });
                 setEditing(false);
               })
             }

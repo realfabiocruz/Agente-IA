@@ -69,6 +69,11 @@ model Skill {
   interviews  Interview[]
 }
 
+enum QuestionMode {
+  AI_DRIVEN // a IA formula as perguntas a partir do tema e do contexto
+  GUIDED // começa pelas perguntas padrão e adapta (novas perguntas, mudança de rumo)
+}
+
 model SkillRubric {
   id            String       @id @default(uuid())
   skillId       String
@@ -78,6 +83,8 @@ model SkillRubric {
   approvedById  String?
   approvedAt    DateTime?
   createdAt     DateTime     @default(now())
+  questionMode  QuestionMode @default(AI_DRIVEN)
+  standardQuestions Json     @default("[]") // lista de textos, usada no modo GUIDED
   skill         Skill        @relation(fields: [skillId], references: [id])
   competencies  Competency[]
   interviews    Interview[]

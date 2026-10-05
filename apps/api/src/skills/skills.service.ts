@@ -75,17 +75,64 @@ export class SkillsService {
     });
   }
 
-  async update(rubricId: string, competencies: RubricDraft['competencies']) {
+  async update(
+    rubricId: string,
+    body: { competencies?: RubricDraft['competencies']; questionMode?: 'AI_DRIVEN' | 'GUIDED'; standardQuestions?: string[] },
+  ) {
     const rubric = await this.prisma.skillRubric.findUnique({ where: { id: rubricId } });
     if (!rubric) throw new NotFoundException();
     if (rubric.status !== 'DRAFT') throw new ConflictException('Só rascunhos podem ser editados; crie uma nova versão');
+    const standardQuestions = body.standardQuestions?.map((q) => q.trim()).filter(Boolean);
+    if ((body.questionMode ?? rubric.questionMode) === 'GUIDED') {
+      const count = standardQuestions?.length ?? (rubric.standardQuestions as unknown[]).length;
+      if (count === 0) throw new BadRequestException('O modo com perguntas padrão precisa de ao menos uma pergunta');
+    }
     await this.prisma.$transaction([
-      this.prisma.competency.deleteMany({ where: { rubricId } }),
-      this.prisma.competency.createMany({
-        data: normalizeCompetencies(competencies).map((c) => ({ ...c, rubricId })),
+      this.prisma.skillRubric.update({
+        where: { id: rubricId },
+        data: {
+          ...(body.questionMode ? { questionMode: body.questionMode } : {}),
+          ...(standardQuestions ? { standardQuestions } : {}),
+        },
       }),
+      ...(body.competencies
+        ? [
+            this.prisma.competency.deleteMany({ where: { rubricId } }),
+            this.prisma.competency.createMany({
+              data: normalizeCompetencies(body.competencies).map((c) => ({ ...c, rubricId })),
+            }),
+          ]
+        : []),
     ]);
     return this.prisma.skillRubric.findUnique({ where: { id: rubricId }, include: { competencies: true } });
+  }
+
+  /** Nova versão em rascunho copiando competências e configuração de perguntas de uma versão existente. */
+  async clone(rubricId: string) {
+    const src = await this.prisma.skillRubric.findUnique({ where: { id: rubricId }, include: { competencies: true } });
+    if (!src) throw new NotFoundException();
+    const last = await this.prisma.skillRubric.findFirst({ where: { skillId: src.skillId }, orderBy: { version: 'desc' } });
+    return this.prisma.skillRubric.create({
+      data: {
+        skillId: src.skillId,
+        version: (last?.version ?? src.version) + 1,
+        status: 'DRAFT',
+        promptVersion: `copia-v${src.version}`,
+        questionMode: src.questionMode,
+        standardQuestions: src.standardQuestions ?? [],
+        competencies: {
+          create: src.competencies.map((c) => ({
+            key: c.key,
+            name: c.name,
+            kind: c.kind,
+            weight: c.weight,
+            levels: c.levels ?? {},
+            anchorQuestions: c.anchorQuestions ?? [],
+          })),
+        },
+      },
+      include: { competencies: true },
+    });
   }
 
   /** Aprova a versão; a aprovada anterior é aposentada (entrevistas antigas continuam apontando para ela). */

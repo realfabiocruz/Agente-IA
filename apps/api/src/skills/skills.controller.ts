@@ -7,7 +7,9 @@ import { CompetencyDraftSchema } from './rubric.prompt';
 import { SkillsService } from './skills.service';
 
 const PatchBody = z.object({
-  competencies: z.array(CompetencyDraftSchema.extend({ weight: z.number().int().min(1).max(3) })).min(1),
+  competencies: z.array(CompetencyDraftSchema.extend({ weight: z.number().int().min(1).max(3) })).min(1).optional(),
+  questionMode: z.enum(['AI_DRIVEN', 'GUIDED']).optional(),
+  standardQuestions: z.array(z.string().max(500)).max(30).optional(),
 });
 
 @Controller()
@@ -34,7 +36,13 @@ export class SkillsController {
   @Roles('ADMIN')
   @Patch('rubrics/:id')
   update(@Param('id', ParseUUIDPipe) id: string, @Body(new ZodPipe(PatchBody)) body: z.infer<typeof PatchBody>) {
-    return this.skills.update(id, body.competencies);
+    return this.skills.update(id, body);
+  }
+
+  @Roles('ADMIN')
+  @Post('rubrics/:id/clone')
+  clone(@Param('id', ParseUUIDPipe) id: string) {
+    return this.skills.clone(id);
   }
 
   @Roles('ADMIN')

@@ -165,6 +165,13 @@ const scrumCompetencies = [
   },
 ];
 
+const scrumStandardQuestions = [
+  'Conte uma retrospectiva ou planning que não estava funcionando. O que você fez e o que mudou?',
+  'Qual foi o impedimento mais difícil que você removeu? Como foi e qual foi o resultado?',
+  'Que métricas você usa com seu time e que decisão você já tomou a partir delas?',
+  'Conte um conflito entre o time e o Product Owner ou um stakeholder. Qual foi seu papel e como terminou?',
+];
+
 async function main() {
   const csharp = await prisma.skill.upsert({
     where: { slug: 'csharp-backend' },
@@ -211,8 +218,19 @@ async function main() {
         promptVersion: 'seed-manual-v1',
         approvedById: 'admin',
         approvedAt: new Date(),
+        questionMode: 'GUIDED',
+        standardQuestions: scrumStandardQuestions,
         competencies: { create: scrumCompetencies },
       },
+    });
+  }
+
+  // Rubricas já existentes (criadas antes da opção de perguntas): configura o modo só se ainda não houver perguntas padrão.
+  const bare = await prisma.skillRubric.findFirst({ where: { skillId: scrum.id, version: 1 } });
+  if (bare && (bare.standardQuestions as unknown[]).length === 0) {
+    await prisma.skillRubric.update({
+      where: { id: bare.id },
+      data: { questionMode: 'GUIDED', standardQuestions: scrumStandardQuestions },
     });
   }
 

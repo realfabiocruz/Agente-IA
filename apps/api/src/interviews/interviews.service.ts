@@ -193,7 +193,13 @@ export class InterviewsService {
     ]);
     const systemPrompt = interviewerSystemPrompt({
       mode: iv.mode as 'TEXT' | 'VOICE',
-      rubric: { skillName: iv.skill.name, version: iv.rubric.version, competencies },
+      rubric: {
+        skillName: iv.skill.name,
+        version: iv.rubric.version,
+        questionMode: iv.rubric.questionMode,
+        standardQuestions: iv.rubric.standardQuestions,
+        competencies,
+      },
       plan,
       candidateName,
       candidateHistory,
