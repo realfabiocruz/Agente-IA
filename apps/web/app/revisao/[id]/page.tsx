@@ -22,6 +22,9 @@ interface Dossier {
     weightedScore: number | null;
     coverage: number;
     summary: string;
+    overallScore: number | null;
+    opinion: string | null;
+    technicalAnalysis: { correct: string[]; incorrect: string[]; gaps: string[] } | null;
     pointsToCheck: string[];
     model: string;
     promptVersion: string;
@@ -71,6 +74,33 @@ export default function DossierPage({ params }: { params: Promise<{ id: string }
 
       {d.report ? (
         <section className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl bg-white p-4 ring-1 ring-gray-200 sm:col-span-3">
+            <div className="flex items-baseline gap-3">
+              <p className="text-4xl font-semibold">{d.report.overallScore ?? '—'}</p>
+              <p className="text-sm text-gray-500">nota técnica de 1 a 10, só pelo acerto das respostas</p>
+            </div>
+            {d.report.opinion ? <p className="mt-3 text-sm text-gray-800">{d.report.opinion}</p> : null}
+            {d.report.technicalAnalysis ? (
+              <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                {(
+                  [
+                    ['Acertos', d.report.technicalAnalysis.correct, 'text-green-800'],
+                    ['Erros ou imprecisões', d.report.technicalAnalysis.incorrect, 'text-red-800'],
+                    ['Lacunas', d.report.technicalAnalysis.gaps, 'text-amber-800'],
+                  ] as const
+                ).map(([title, items, color]) => (
+                  <div key={title}>
+                    <p className={`font-medium ${color}`}>{title}</p>
+                    <ul className="list-disc pl-4 text-gray-700">
+                      {items.map((x, i) => (
+                        <li key={i}>{x}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <div className="rounded-xl bg-white p-4 ring-1 ring-gray-200">
             <p className="text-sm text-gray-500">Nota ponderada</p>
             <p className="text-3xl font-semibold">{d.report.weightedScore ?? '—'}</p>

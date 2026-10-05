@@ -193,6 +193,9 @@ model InterviewReport {
   weightedScore Decimal?  @db.Decimal(4, 2) // só sobre competências pontuadas
   coverage      Decimal   @db.Decimal(4, 3) // % do peso efetivamente explorado
   summary       String
+  overallScore  Int? // 1 a 10, só correção técnica das respostas
+  opinion       String? // parecer técnico sobre a entrevista
+  technicalAnalysis Json? // { correct, incorrect, gaps }
   pointsToCheck Json
   model         String // id do modelo Claude usado
   promptVersion String

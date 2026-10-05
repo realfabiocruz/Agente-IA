@@ -74,6 +74,7 @@ export class EvaluationService implements OnApplicationBootstrap {
           ? await this.runLive(iv.skill.name, iv.rubric.version, competencies, iv.turns, interviewerEvidence)
           : { evaluation: this.runMock(competencies, iv.turns, interviewerEvidence), model: 'mock', usage: null };
       await this.persist(interviewId, competencies, iv.turns, evaluation, model, usage);
+      this.logger.log(`Avaliação ${interviewId}: nota ${evaluation.overallScore ?? 'N/A'}/10 | ${evaluation.opinion}`);
     } catch (err) {
       this.logger.error(err);
       await this.prisma.$transaction([
@@ -130,6 +131,9 @@ export class EvaluationService implements OnApplicationBootstrap {
           evidences: ev.map((e) => ({ turnSeq: e.turnSeq, quote: e.quote })),
         };
       }),
+      overallScore: null,
+      opinion: 'Parecer indisponível no modo mock.',
+      technicalAnalysis: { correct: [], incorrect: [], gaps: [] },
       summary: 'Dossiê gerado pelo avaliador simulado (LLM_MODE=mock). As notas não refletem análise real.',
       pointsToCheck: ['Modo mock: configure ANTHROPIC_API_KEY para a avaliação real.'],
     };
@@ -202,6 +206,12 @@ export class EvaluationService implements OnApplicationBootstrap {
           weightedScore,
           coverage,
           summary: evaluation.summary,
+          overallScore:
+            evaluation.overallScore != null && evaluation.overallScore >= 1 && evaluation.overallScore <= 10
+              ? evaluation.overallScore
+              : null,
+          opinion: evaluation.opinion,
+          technicalAnalysis: evaluation.technicalAnalysis as Prisma.InputJsonValue,
           pointsToCheck: points,
           model,
           promptVersion: model === 'mock' ? 'mock-v1' : EVALUATOR_PROMPT_VERSION,
